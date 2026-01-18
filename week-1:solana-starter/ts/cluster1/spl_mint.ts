@@ -1,9 +1,14 @@
 import { Keypair, PublicKey, Connection, Commitment } from "@solana/web3.js";
-import { getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
+// import { getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 import wallet from "../turbin3-wallet.json"
+import CONST from "./CONSTANTS.json"
+import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 
 // Import our keypair from the wallet file
 const keypair = Keypair.fromSecretKey(new Uint8Array(wallet));
+console.log(`Your public key is: ${keypair.publicKey.toBase58()}`);
+
+const MINT = CONST.MINT_ADDRESS;
 
 //Create a Solana devnet connection
 const commitment: Commitment = "confirmed";
@@ -12,17 +17,34 @@ const connection = new Connection("https://api.devnet.solana.com", commitment);
 const token_decimals = 1_000_000n;
 
 // Mint address
-const mint = new PublicKey("<mint address>");
+const mint = new PublicKey(MINT);
+
+
 
 (async () => {
     try {
         // Create an ATA
-        // const ata = ???
-        // console.log(`Your ata is: ${ata.address.toBase58()}`);
+        const ata = await getOrCreateAssociatedTokenAccount(
+            connection,
+            keypair,
+            mint,
+            keypair.publicKey
+        );
+        console.log(`Your ata is: ${ata.address.toBase58()}`);
+
+        const destination = ata.address
 
         // Mint to ATA
-        // const mintTx = ???
-        // console.log(`Your mint txid: ${mintTx}`);
+        const mintTx = await mintTo(
+            connection,
+            keypair,
+            mint,
+            destination,
+            keypair,
+            token_decimals // 1 token, because our mint has 6 decimals
+        );
+        console.log(`Your mint txid: ${mintTx}`);
+        console.log(`link: https://explorer.solana.com/tx/${mintTx}?cluster=devnet`);
     } catch(error) {
         console.log(`Oops, something went wrong: ${error}`)
     }
