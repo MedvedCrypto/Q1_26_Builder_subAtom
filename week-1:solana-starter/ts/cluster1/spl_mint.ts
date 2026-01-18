@@ -19,6 +19,8 @@ const token_decimals = 1_000_000n;
 // Mint address
 const mint = new PublicKey(MINT);
 
+
+
 (async () => {
     try {
         // Create an ATA
@@ -30,12 +32,14 @@ const mint = new PublicKey(MINT);
         );
         console.log(`Your ata is: ${ata.address.toBase58()}`);
 
+        const destination = ata.address
+
         // Mint to ATA
         const mintTx = await mintTo(
             connection,
             keypair,
             mint,
-            ata.address,
+            destination,
             keypair,
             token_decimals // 1 token, because our mint has 6 decimals
         );
