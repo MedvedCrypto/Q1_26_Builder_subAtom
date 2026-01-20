@@ -1,1 +1,8 @@
-{"MINT_ADDRESS": "39wbDCPrKLWM21J5bgHB65ZL8WvXWt8KVRnXRCg4jjZt"}
+{
+  "MINT_ADDRESS": "39wbDCPrKLWM21J5bgHB65ZL8WvXWt8KVRnXRCg4jjZt",
+  "DECIMALS": 6,
+  "imageURI": "https://gateway.irys.xyz/BzMnVVFmE4j1aAjP7QQ2HwTqwbAK9CUDaVJSYynYUehM",
+    "metadataURI": "https://gateway.irys.xyz/Fnzvi3qmEKFzYD6pWGjns5rwaGD5sTq6tek4ops3X4mr",
+"NFT_MINT_ADDRESS": "2FCt7LzqYNqPLzJGpmYjTiX1ipmySAZBAULBW8X7aokV"
+
+}
