@@ -1,8 +1,10 @@
 import wallet from "../turbin3-wallet.json"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
-import { createGenericFile, createSignerFromKeypair, signerIdentity } from "@metaplex-foundation/umi"
+import { createGenericFile, createSignerFromKeypair, GenericFileOptions, signerIdentity } from "@metaplex-foundation/umi"
 import { irysUploader } from "@metaplex-foundation/umi-uploader-irys"
 import { readFile } from "fs/promises"
+
+
 
 // Create a devnet connection
 const umi = createUmi('https://api.devnet.solana.com');
@@ -10,8 +12,20 @@ const umi = createUmi('https://api.devnet.solana.com');
 let keypair = umi.eddsa.createKeypairFromSecretKey(new Uint8Array(wallet));
 const signer = createSignerFromKeypair(umi, keypair);
 
-umi.use(irysUploader());
+umi.use(irysUploader({address: "https://devnet.irys.xyz"}));
 umi.use(signerIdentity(signer));
+
+
+const myData:GenericFileOptions = {
+    "displayName": 'subAtom Image',
+    'uniqueName': 'subAtom-image-001',
+    'contentType': 'image/png',
+    'extension': 'png',
+    'tags': [{
+        'name': 'tag_name',
+        'value': 'NFT Image',
+    }]
+};
 
 (async () => {
     try {
@@ -19,10 +33,16 @@ umi.use(signerIdentity(signer));
         //2. Convert image to generic file.
         //3. Upload image
 
-        // const image = ???
 
-        // const [myUri] = ??? 
-        // console.log("Your image URI: ", myUri);
+        const image = await readFile("./assets/1.png");
+
+        const genericFile = createGenericFile(image, "1.png", myData);
+
+        const file = genericFile 
+
+        const myUri = await umi.uploader.upload([file])
+
+        console.log("Your image URI: ", myUri); 
     }
     catch(error) {
         console.log("Oops.. Something went wrong", error);
