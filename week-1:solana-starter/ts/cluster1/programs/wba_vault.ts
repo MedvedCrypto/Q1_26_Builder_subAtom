@@ -1,6 +1,9 @@
 export type WbaVault = {
   version: "0.1.0";
   name: "wba_vault";
+  address: "D51uEDHLbWAxNfodfQDv7qkp8WZtxrhi3uganGbNos7o";
+  metadata: any;
+  types: [];
   instructions: [
     {
       name: "initialize";
@@ -669,9 +672,20 @@ export type WbaVault = {
   ];
 };
 
+
+
+
 export const IDL: WbaVault = {
   version: "0.1.0",
   name: "wba_vault",
+      metadata: {
+      "name": "solana_turbin3_Q1_2026",
+      "version": "0.1.0",
+      "spec": "2.2.8",
+      "description": "subAtom Q1 2026 Solana Turbin3 program"
+    },
+    types: [],
+  address: "D51uEDHLbWAxNfodfQDv7qkp8WZtxrhi3uganGbNos7o",
   instructions: [
     {
       name: "initialize",
