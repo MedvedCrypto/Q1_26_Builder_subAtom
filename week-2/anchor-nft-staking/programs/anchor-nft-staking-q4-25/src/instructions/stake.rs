@@ -32,12 +32,20 @@ pub struct Stake<'info> {
     )]
     pub config: Account<'info, StakeConfig>,
 
-    #[account(mut)]
-    /// CHECK: Asset account to be staked (Mutable because we add a plugin)
+    #[account(
+        mut,
+        constraint = collection.owner == &CORE_PROGRAM_ID,
+        constraint = !collection.data_is_empty()
+    )]
+    /// CHECK: Verified by CORE_PROGRAM_ID
     pub asset: UncheckedAccount<'info>,
 
-    #[account(mut)] 
-    /// CHECK: Verified by mpl-core. Mutable just in case Core needs to write to it.
+    #[account(
+        mut,
+        constraint = collection.owner == &CORE_PROGRAM_ID,
+        constraint = !collection.data_is_empty()
+    )]
+    /// CHECK: Verified by CORE_PROGRAM_ID
     pub collection: UncheckedAccount<'info>,
 
     #[account(
@@ -58,20 +66,7 @@ pub struct Stake<'info> {
 
 impl<'info> Stake<'info> {
     pub fn stake(&mut self, bumps: &StakeBumps) -> Result<()> {
-    // TODO : implement stake logic
         let clock: Clock = Clock::get()?;   
-
-        require_keys_eq!(
-            *self.asset.owner,
-            CORE_PROGRAM_ID,
-            StakeError::InvalidAsset
-        );
-
-        require_keys_eq!(
-            *self.collection.owner,
-            CORE_PROGRAM_ID,
-            StakeError::InvalidCollection
-        );
 
         //Check max stake limit
         if self.user_account.amount_staked >= self.config.max_stake as u8 {

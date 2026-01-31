@@ -32,11 +32,19 @@ pub struct Unstake<'info> {
     )]
     pub config: Account<'info, StakeConfig>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = asset.owner == &CORE_PROGRAM_ID,
+        constraint = !asset.data_is_empty() @ StakeError::AssetNotInitialized
+    )]
     /// CHECK: Asset account to be unstaked (Mutable because we remove a plugin)
     pub asset: UncheckedAccount<'info>,
 
-    #[account(mut)] 
+    #[account(
+        mut,
+        constraint = asset.owner == &CORE_PROGRAM_ID,
+        constraint = !asset.data_is_empty() @ StakeError::AssetNotInitialized
+    )]
     /// CHECK: Verified by mpl-core. Mutable just in case Core needs to write to it.
     pub collection: UncheckedAccount<'info>,
 
@@ -57,17 +65,17 @@ pub struct Unstake<'info> {
 
 impl<'info> Unstake<'info> {
     pub fn unstake(&mut self) -> Result<()> {
-        let clock: Clock = Clock::get()?;
 
-        // Check if freeze period has passed
-        let stake_time = self.stake_account.staked_at;
-        let freeze_period = self.config.freeze_period as i64;
+        // Ensure freeze period has passed
+        let time_elapsed = (Clock::get()?.unix_timestamp - self.stake_account.staked_at)
+            .checked_div(86400)
+            .unwrap() as u32;
+        require!(
+            time_elapsed >= self.config.freeze_period,
+            StakeError::FreezePeriodNotPassed
+        );
 
-        if clock.unix_timestamp < stake_time + freeze_period {
-            return Err(StakeError::FreezePeriodNotPassed.into());
-        }
-
-        let time_elapsed = (clock.unix_timestamp - stake_time) as u32;
+        // Calculate and update points earned
         let points_earned = time_elapsed * self.config.points_per_stake as u32;
         self.user_account.points += points_earned;
 
