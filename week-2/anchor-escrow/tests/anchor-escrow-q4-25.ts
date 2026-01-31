@@ -113,7 +113,7 @@ describe("anchor_escrow_q4_25", () => {
   });
 
   it("Makes and takes the escrow", async () => {
-    const seed2 = new anchor.BN(2222);
+    const seed2 = new anchor.BN(Math.floor(Math.random() * 1000000));
     [escrowPda, escrowBump] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("escrow"), maker.toBuffer(), seed2.toArrayLike(Buffer, "le", 8)],
       program.programId
