@@ -233,6 +233,7 @@ describe("anchor-nft-staking-q4-25", () => {
   describe("Unstake NFT", () => {
     it("Unstake the NFT and remove FreezeDelegate plugin", async () => {
       // Wait for freeze period if needed (0 in this test)
+      await new Promise((resolve) => setTimeout(resolve, 2100));
       if (freezePeriod > 0) {
         console.log(`Waiting for freeze period: ${freezePeriod} days`);
         // In a real test with actual freeze period, you'd need to manipulate time or wait
