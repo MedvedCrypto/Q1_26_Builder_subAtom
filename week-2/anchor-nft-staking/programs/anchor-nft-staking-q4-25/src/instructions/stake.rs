@@ -34,16 +34,16 @@ pub struct Stake<'info> {
 
     #[account(
         mut,
-        constraint = collection.owner == &CORE_PROGRAM_ID,
-        constraint = !collection.data_is_empty()
+        constraint = asset.owner == &CORE_PROGRAM_ID @ StakeError::NotOwner,
+        constraint = !asset.data_is_empty() @ StakeError::AssetNotInitialized
     )]
     /// CHECK: Verified by CORE_PROGRAM_ID
     pub asset: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        constraint = collection.owner == &CORE_PROGRAM_ID,
-        constraint = !collection.data_is_empty()
+        constraint = collection.owner == &CORE_PROGRAM_ID @ StakeError::NotOwner,
+        constraint = !collection.data_is_empty() @ StakeError::CollectionNotInitialized
     )]
     /// CHECK: Verified by CORE_PROGRAM_ID
     pub collection: UncheckedAccount<'info>,
