@@ -39,6 +39,8 @@ pub enum AmmError {
     InsufficientBalance,
     #[msg("Zero balance.")]
     ZeroBalance,
+    #[msg("Insufficient LP token balance.")]
+    InsufficientLpBalance,
 }
 
 impl From<CurveError> for AmmError {

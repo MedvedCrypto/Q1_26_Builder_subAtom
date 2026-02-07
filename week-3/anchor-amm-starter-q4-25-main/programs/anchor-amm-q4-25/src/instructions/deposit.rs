@@ -22,7 +22,7 @@ pub struct Deposit<'info> {
     pub config: Account<'info, Config>,
     #[account(
         mut,
-        seeds = [b"lp", config.key().as_ref()],
+        seeds = [b"lp", config.seed.to_le_bytes().as_ref()],
         bump = config.lp_bump,
     )]
     pub mint_lp: Account<'info, Mint>,
@@ -85,7 +85,7 @@ impl<'info> Deposit<'info> {
                     amount,
                     6,
                 )
-                .unwrap();
+                .map_err(|_| AmmError::Overflow)?; // handle potential overflow error
                 (amounts.x, amounts.y)
             }
         };
@@ -126,6 +126,11 @@ impl<'info> Deposit<'info> {
     }
 
     pub fn mint_lp_tokens(&self, amount: u64) -> Result<()> {
+        require!(
+            self.mint_lp.supply.checked_add(amount).is_some(),
+            AmmError::Overflow
+        );
+
         let cpi_program = self.token_program.to_account_info();
 
         let cpi_accounts = MintTo {
