@@ -34,7 +34,7 @@ pub struct Unstake<'info> {
 
     #[account(
         mut,
-        constraint = asset.owner == &CORE_PROGRAM_ID,
+        constraint = asset.owner == &CORE_PROGRAM_ID @ StakeError::NotOwner,
         constraint = !asset.data_is_empty() @ StakeError::AssetNotInitialized
     )]
     /// CHECK: Asset account to be unstaked (Mutable because we remove a plugin)
@@ -42,8 +42,8 @@ pub struct Unstake<'info> {
 
     #[account(
         mut,
-        constraint = asset.owner == &CORE_PROGRAM_ID,
-        constraint = !asset.data_is_empty() @ StakeError::AssetNotInitialized
+        constraint = collection.owner == &CORE_PROGRAM_ID @ StakeError::NotOwner,
+        constraint = !collection.data_is_empty() @ StakeError::CollectionNotInitialized
     )]
     /// CHECK: Verified by mpl-core. Mutable just in case Core needs to write to it.
     pub collection: UncheckedAccount<'info>,
