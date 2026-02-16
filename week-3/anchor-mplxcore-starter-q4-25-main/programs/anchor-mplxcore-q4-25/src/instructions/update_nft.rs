@@ -16,6 +16,7 @@ pub struct UpdateNft<'info> {
     #[account(
         seeds = [b"collection_authority", collection.key().as_ref()],
         bump = collection_authority.bump,
+        //"hand" check with constraint
         constraint = collection_authority.creator == authority.key() @ MPLXCoreError::NotAuthorized
     )]
     pub collection_authority: Account<'info, CollectionAuthority>,
