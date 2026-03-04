@@ -13,7 +13,7 @@ use anchor_spl::{
 };
 use mpl_token_metadata::accounts::{MasterEdition, Metadata as MetadataAccount};
 
-declare_id!("2s6CLnLvfbYe1ubUFVrjWwEC3s86jQfEyqhpqkvLe23B");
+declare_id!("FisvpEC1NDf4kZtzJY3cBvA6xJnohVxjD3WvzxJk5jRu");
 
 #[program]
 pub mod solvency {
@@ -28,8 +28,10 @@ pub mod solvency {
         nft_collection: Pubkey,
     ) -> Result<()> {
         if plan_seed.len() > 32 {
-            return err!(ErrorCode::PlanSeedTooLong);
+            return err!(SolVeilErrors::PlanSeedTooLong);
         }
+        require!(upfront_percentage <= 100, SolVeilErrors::InvalidUpfrontPercentage);
+        
         let plan = &mut ctx.accounts.plan;
         plan.creator = ctx.accounts.creator.key();
         plan.upfront_percentage = upfront_percentage;
@@ -50,7 +52,11 @@ pub mod solvency {
         uri: String,
     ) -> Result<()> {
         let plan = &ctx.accounts.plan;
-        let decimals = ctx.accounts.payment_mint.decimals;
+        
+        require!(amount > 0, SolVeilErrors::InvalidAmount);
+        require!(name.len() <= 32, SolVeilErrors::NameTooLong);
+        require!(symbol.len() <= 10, SolVeilErrors::SymbolTooLong);
+        require!(uri.len() <= 200, SolVeilErrors::UriTooLong);
 
         let upfront = ((plan.upfront_percentage as u128 * amount as u128) / 100) as u64;
         let remaining = amount.saturating_sub(upfront);
@@ -92,12 +98,25 @@ pub mod solvency {
         require_keys_eq!(edition_pda, ctx.accounts.master_edition.key());
 
         // Mint NFT
-        let sub_seeds = &[
-            b"user_subscription",
-            ctx.accounts.plan.to_account_info().key.as_ref(),
-            ctx.accounts.user.to_account_info().key.as_ref(),
-            &[ctx.bumps.user_subscription],
+        // Bind temporaries first
+        let plan_key = plan.key();  // Pubkey is Copy, so this is fine
+        let user_key = ctx.accounts.user.key();
+        let bump = [ctx.bumps.user_subscription];  // [u8; 1]
+
+        // Now create the owned array
+        let sub_seeds_inner_array = [
+            b"user_subscription" as &[u8],
+            plan_key.as_ref(),
+            user_key.as_ref(),
+            &bump,
         ];
+
+        // Slice it
+        let sub_seeds_inner: &[&[u8]] = &sub_seeds_inner_array;
+
+        // Wrap for CPI (multiple signers, even if one)
+        let sub_seeds: &[&[&[u8]]] = &[sub_seeds_inner];
+        
         token::mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -106,7 +125,7 @@ pub mod solvency {
                     to: ctx.accounts.nft_ata.to_account_info(),
                     authority: ctx.accounts.user_subscription.to_account_info(),
                 },
-                &[sub_seeds],
+                sub_seeds,
             ),
             1,
         )?;
@@ -124,6 +143,7 @@ pub mod solvency {
             }),
             uses: None,
         };
+        
         create_metadata_accounts_v3(
             CpiContext::new_with_signer(
                 ctx.accounts.token_metadata_program.to_account_info(),
@@ -136,7 +156,7 @@ pub mod solvency {
                     system_program: ctx.accounts.system_program.to_account_info(),
                     rent: ctx.accounts.rent.to_account_info(),
                 },
-                &[sub_seeds],
+                sub_seeds,
             ),
             data_v2,
             true,
@@ -159,7 +179,7 @@ pub mod solvency {
                     system_program: ctx.accounts.system_program.to_account_info(),
                     rent: ctx.accounts.rent.to_account_info(),
                 },
-                &[sub_seeds],
+                sub_seeds,
             ),
             Some(0),
         )?;
@@ -182,6 +202,9 @@ pub mod solvency {
         let plan = &ctx.accounts.plan;
         let user_sub = &ctx.accounts.user_subscription;
         let current_time = Clock::get()?.unix_timestamp as u64;
+        
+        require!(user_sub.is_active, SolVeilErrors::SubscriptionNotActive);
+        
         let elapsed = current_time.saturating_sub(user_sub.start_time);
         let upfront = ((plan.upfront_percentage as u128 * user_sub.total_deposit_amount as u128)
             / 100) as u64;
@@ -195,12 +218,13 @@ pub mod solvency {
         let refundable = user_sub.total_deposit_amount.saturating_sub(vested);
         let unclaimed = vested.saturating_sub(user_sub.claimed_by_creator_amount);
 
-        let plan_seeds: &[&[u8]] = &[
+        let plan_seeds_inner: &[&[u8]] = &[
             b"plan",
             plan.creator.as_ref(),
-            plan.seed.as_ref(),
+            &plan.seed,
             &[plan.bump],
         ];
+        let plan_seeds: &[&[&[u8]]] = &[plan_seeds_inner];
 
         // Claim unclaimed vested to creator
         if unclaimed > 0 {
@@ -212,7 +236,7 @@ pub mod solvency {
                         to: ctx.accounts.creator_token.to_account_info(),
                         authority: ctx.accounts.plan.to_account_info(),
                     },
-                    &[plan_seeds],
+                    plan_seeds,
                 ),
                 unclaimed,
             )?;
@@ -228,7 +252,7 @@ pub mod solvency {
                         to: ctx.accounts.user_token.to_account_info(),
                         authority: ctx.accounts.plan.to_account_info(),
                     },
-                    &[plan_seeds],
+                    plan_seeds,
                 ),
                 refundable,
             )?;
@@ -248,19 +272,23 @@ pub mod solvency {
         )?;
 
         // Close NFT ATA
-        token::close_account(CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            CloseAccount {
-                account: ctx.accounts.nft_ata.to_account_info(),
-                destination: ctx.accounts.user.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            },
-        ))?;
+        token::close_account(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                CloseAccount {
+                    account: ctx.accounts.nft_ata.to_account_info(),
+                    destination: ctx.accounts.user.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            )
+        )?;
 
         Ok(())
     }
 
     pub fn renew_subscription(ctx: Context<RenewSubscription>, amount: u64) -> Result<()> {
+        require!(amount > 0, SolVeilErrors::InvalidAmount);
+        
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -274,7 +302,8 @@ pub mod solvency {
         )?;
 
         let user_sub = &mut ctx.accounts.user_subscription;
-        user_sub.total_deposit_amount += amount;
+        user_sub.total_deposit_amount = user_sub.total_deposit_amount.checked_add(amount)
+            .ok_or(SolVeilErrors::MathOverflow)?;
 
         Ok(())
     }
@@ -283,6 +312,9 @@ pub mod solvency {
         let plan = &ctx.accounts.plan;
         let user_sub = &mut ctx.accounts.user_subscription;
         let current_time = Clock::get()?.unix_timestamp as u64;
+        
+        require!(user_sub.is_active, SolVeilErrors::SubscriptionNotActive);
+        
         let elapsed = current_time.saturating_sub(user_sub.start_time);
         let upfront = ((plan.upfront_percentage as u128 * user_sub.total_deposit_amount as u128)
             / 100) as u64;
@@ -295,12 +327,13 @@ pub mod solvency {
         let vested = upfront + vested_linear;
         let claimable = vested.saturating_sub(user_sub.claimed_by_creator_amount);
 
-        let plan_seeds: &[&[u8]] = &[
+        let plan_seeds_inner: &[&[u8]] = &[
             b"plan",
             plan.creator.as_ref(),
-            plan.seed.as_ref(),
+            &plan.seed,
             &[plan.bump],
         ];
+        let plan_seeds: &[&[&[u8]]] = &[plan_seeds_inner];
 
         if claimable > 0 {
             token::transfer(
@@ -311,11 +344,13 @@ pub mod solvency {
                         to: ctx.accounts.creator_token.to_account_info(),
                         authority: ctx.accounts.plan.to_account_info(),
                     },
-                    &[plan_seeds],
+                    plan_seeds,
                 ),
                 claimable,
             )?;
-            user_sub.claimed_by_creator_amount += claimable;
+            user_sub.claimed_by_creator_amount = user_sub.claimed_by_creator_amount
+                .checked_add(claimable)
+                .ok_or(SolVeilErrors::MathOverflow)?;
         }
 
         Ok(())
@@ -328,11 +363,11 @@ pub struct CreatePlan<'info> {
     #[account(
         init,
         payer = creator,
-        space = SubscriptionPlan::LEN,
+        space = 8 + SubscriptionPlan::LEN,
         seeds = [b"plan", creator.key().as_ref(), plan_seed.as_bytes()],
         bump
     )]
-    pub plan: Account<'info, SubscriptionPlan>,
+    pub plan: Box<Account<'info, SubscriptionPlan>>,
     #[account(mut)]
     pub creator: Signer<'info>,
     pub payment_mint: Account<'info, Mint>,
@@ -347,10 +382,7 @@ pub struct CreatePlan<'info> {
     )]
     pub vault: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
-}
-
-impl SubscriptionPlan {
-    const LEN: usize = 8 + 32 + 1 + 8 + 32 + 32 + 8 + 1 + 4 + 32; // discriminator + fields + Vec<u8> max 32
+    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -361,10 +393,10 @@ pub struct BuySubscription<'info> {
         seeds = [b"plan", plan.creator.as_ref(), plan.seed.as_ref()],
         bump = plan.bump
     )]
-    pub plan: Account<'info, SubscriptionPlan>,
+    pub plan: Box<Account<'info, SubscriptionPlan>>,
     pub payment_mint: Account<'info, Mint>,
     #[account(mut)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         token::mint = payment_mint,
@@ -381,11 +413,11 @@ pub struct BuySubscription<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1,
+        space = 8 + UserSubscription::LEN,
         seeds = [b"user_subscription", plan.key().as_ref(), user.key().as_ref()],
         bump
     )]
-    pub user_subscription: Account<'info, UserSubscription>,
+pub user_subscription: Box<Account<'info, UserSubscription>>,
     #[account(
         init,
         payer = user,
@@ -393,18 +425,18 @@ pub struct BuySubscription<'info> {
         mint::authority = user_subscription,
         mint::freeze_authority = user_subscription
     )]
-    pub nft_mint: Account<'info, Mint>,
+pub nft_mint: Box<Account<'info, Mint>>,
     #[account(
-        init_if_needed,
+        init,
         payer = user,
         associated_token::mint = nft_mint,
         associated_token::authority = user
     )]
     pub nft_ata: Account<'info, TokenAccount>,
-    /// CHECK: Verified in code
+    /// CHECK: Verified in code against MetadataAccount::find_pda
     #[account(mut)]
     pub metadata: UncheckedAccount<'info>,
-    /// CHECK: Verified in code
+    /// CHECK: Verified in code against MasterEdition::find_pda
     #[account(mut)]
     pub master_edition: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
@@ -433,20 +465,28 @@ pub struct CloseSubscription<'info> {
     pub user_subscription: Box<Account<'info, UserSubscription>>,
     #[account(mut)]
     pub vault: Box<Account<'info, TokenAccount>>,
-    #[account(mut, token::mint = plan.payment_mint, token::authority = user)]
+    #[account(
+        mut,
+        token::mint = plan.payment_mint,
+        token::authority = user
+    )]
     pub user_token: Account<'info, TokenAccount>,
-    #[account(mut, token::mint = plan.payment_mint, token::authority = plan.creator)]
+    #[account(
+        mut,
+        token::mint = plan.payment_mint,
+        token::authority = plan.creator
+    )]
     pub creator_token: Account<'info, TokenAccount>,
     #[account(
         mut,
-        constraint = user_subscription.subscription_mint == nft_mint.key()
+        constraint = user_subscription.subscription_mint == nft_mint.key() @ SolVeilErrors::InvalidNftMint
     )]
     pub nft_mint: Account<'info, Mint>,
     #[account(
         mut,
-        token::mint = nft_mint,
-        token::authority = user,
-        constraint = nft_ata.amount == 1
+        associated_token::mint = nft_mint,
+        associated_token::authority = user,
+        constraint = nft_ata.amount == 1 @ SolVeilErrors::InvalidNftAmount
     )]
     pub nft_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
@@ -464,16 +504,21 @@ pub struct RenewSubscription<'info> {
     pub plan: Account<'info, SubscriptionPlan>,
     #[account(mut)]
     pub vault: Account<'info, TokenAccount>,
-    #[account(mut, token::mint = plan.payment_mint, token::authority = user)]
+    #[account(
+        mut,
+        token::mint = plan.payment_mint,
+        token::authority = user
+    )]
     pub user_token: Account<'info, TokenAccount>,
     #[account(
         mut,
         has_one = plan,
-        constraint = user_subscription.is_active,
+        constraint = user_subscription.is_active @ SolVeilErrors::SubscriptionNotActive,
         seeds = [b"user_subscription", plan.key().as_ref(), user.key().as_ref()],
         bump = user_subscription.bump
     )]
     pub user_subscription: Account<'info, UserSubscription>,
+    pub payment_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -484,15 +529,22 @@ pub struct ClaimTokens<'info> {
         bump = plan.bump
     )]
     pub plan: Account<'info, SubscriptionPlan>,
-    #[account(mut)]
+    #[account(
+        mut,
+        has_one = plan,
+        constraint = user_subscription.is_active @ SolVeilErrors::SubscriptionNotActive,
+    )]
     pub user_subscription: Account<'info, UserSubscription>,
     #[account(mut)]
     pub vault: Account<'info, TokenAccount>,
-    #[account(mut, token::mint = plan.payment_mint, token::authority = plan.creator)]
+    #[account(
+        mut,
+        token::mint = plan.payment_mint,
+        token::authority = plan.creator
+    )]
     pub creator_token: Account<'info, TokenAccount>,
     #[account(mut, signer, constraint = plan.creator == creator.key() @ SolVeilErrors::Unauthorized)]
-    /// CHECK:
-    pub creator: AccountInfo<'info>,
+    pub creator: Signer<'info>,
     pub payment_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
 }
@@ -509,6 +561,10 @@ pub struct SubscriptionPlan {
     pub seed: Vec<u8>,
 }
 
+impl SubscriptionPlan {
+    const LEN: usize = 32 + 1 + 8 + 32 + 32 + 8 + 1 + 4 + 32;
+}
+
 #[account]
 pub struct UserSubscription {
     pub plan: Pubkey,
@@ -521,8 +577,6 @@ pub struct UserSubscription {
     pub bump: u8,
 }
 
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Plan seed too long")]
-    PlanSeedTooLong,
+impl UserSubscription {
+    const LEN: usize = 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1;
 }
