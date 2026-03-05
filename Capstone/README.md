@@ -6,15 +6,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/your-username/subscription-nft-protocol/stargazers">
-    <img src="https://img.shields.io/github/stars/your-username/subscription-nft-protocol?style=social" alt="Stars">
-  </a>
-  <a href="https://github.com/your-username/subscription-nft-protocol/forks">
-    <img src="https://img.shields.io/github/forks/your-username/subscription-nft-protocol?style=social" alt="Forks">
-  </a>
-  <a href="https://github.com/your-username/subscription-nft-protocol/releases">
-    <img src="https://img.shields.io/github/v/release/your-username/subscription-nft-protocol?color=success" alt="Latest Release">
-  </a>
   <a href="https://solana.com">
     <img src="https://img.shields.io/badge/Built%20on-Solana-9945FF?logo=solana&logoColor=white" alt="Solana">
   </a>
