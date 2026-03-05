@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://via.placeholder.com/1200x400/1e40af/ffffff?text=Subscription+NFT+Protocol" alt="Subscription NFT Protocol" width="800"/>
+  <img src="https://raw.githubusercontent.com/MedvedCrypto/Q1_26_Builder_subAtom/main/Capstone/tests/images/logo.png" alt="Subscription NFT Protocol" width="800"/>
   <br><br>
   <h1>Subscription NFT Protocol</h1>
   <h3>A Solana-based protocol for NFT-powered recurring subscriptions with vesting & instant refunds</h3>
@@ -78,4 +78,49 @@ seeds = [b"plan", creator_key.as_ref(), plan_id.as_ref()]
 // UserSubscription PDA
 seeds = [b"user_sub", plan_key.as_ref(), user_key.as_ref()]
 
-// Vault (associated token account seeds can be derived normally)
+// Vault PDA
+seeds = [b"vault", plan_key.as_ref()]
+```
+
+## 🖼️ Architecture & Flow Diagrams
+
+### 1. High-Level Architecture
+This diagram illustrates the core Program Derived Addresses (PDAs) and the interaction with external SPL programs (Token and Metaplex).
+
+![High-Level Architecture](tests/images/1.png)
+*Image 1: Core protocol architecture — Plan PDA, User Subscription PDA, and interactions with SPL Token & Metaplex programs.*
+
+---
+
+### 2. Buy Subscription Flow
+A detailed sequence of the `buy_subscription` instruction: validating the payment mint, creating the User Subscription PDA, splitting the payment into upfront and vesting portions, transferring funds, minting the NFT, and updating the PDA.
+
+![Buy Subscription Flow](tests/images/2.png)
+*Image 2: Complete flow for a user to purchase a subscription, including fund split, NFT minting, and PDA initialization.*
+
+---
+
+### 3. Close Subscription Flow
+This diagram shows the `close_subscription` process: verifying NFT ownership, burning the NFT via Metaplex, calculating the refundable (unvested) amount, transferring funds back to the user, and deactivating the User Subscription PDA.
+
+![Close Subscription Flow](tests/images/3.png)
+*Image 3: User burns NFT to receive unvested funds — ownership verification, burn, refund calculation, and account closure.*
+
+---
+
+### 4. Claim Tokens Flow (Creator)
+The creator's `claim_tokens` instruction: calculating the vested amount based on the vesting schedule, transferring tokens from the vault to the creator's wallet, and updating the `claimed_by_creator_amount` in the User Subscription PDA.
+
+![Claim Tokens Flow](tests/images/4.png)
+*Image 4: Creator withdraws vested earnings — vesting calculation, fund transfer, and PDA update.*
+
+---
+
+### 5. Renew Subscription Flow
+The `renew_subscription` flow: user deposits additional tokens, the protocol updates the `total_deposit_amount` in the existing User Subscription PDA, and optionally resets the vesting start time — all while keeping the same NFT.
+
+![Renew Subscription Flow](tests/images/5.png)
+*Image 5: User extends subscription by depositing more tokens — existing NFT remains, PDA is updated.*
+
+
+
