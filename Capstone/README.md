@@ -88,6 +88,7 @@ seeds = [b"vault", plan_key.as_ref()]
 This diagram illustrates the core Program Derived Addresses (PDAs) and the interaction with external SPL programs (Token and Metaplex).
 
 ![High-Level Architecture](tests/images/1.png)
+
 *Image 1: Core protocol architecture — Plan PDA, User Subscription PDA, and interactions with SPL Token & Metaplex programs.*
 
 ---
@@ -96,6 +97,7 @@ This diagram illustrates the core Program Derived Addresses (PDAs) and the inter
 A detailed sequence of the `buy_subscription` instruction: validating the payment mint, creating the User Subscription PDA, splitting the payment into upfront and vesting portions, transferring funds, minting the NFT, and updating the PDA.
 
 ![Buy Subscription Flow](tests/images/2.png)
+
 *Image 2: Complete flow for a user to purchase a subscription, including fund split, NFT minting, and PDA initialization.*
 
 ---
@@ -104,6 +106,7 @@ A detailed sequence of the `buy_subscription` instruction: validating the paymen
 This diagram shows the `close_subscription` process: verifying NFT ownership, burning the NFT via Metaplex, calculating the refundable (unvested) amount, transferring funds back to the user, and deactivating the User Subscription PDA.
 
 ![Close Subscription Flow](tests/images/3.png)
+
 *Image 3: User burns NFT to receive unvested funds — ownership verification, burn, refund calculation, and account closure.*
 
 ---
@@ -112,6 +115,7 @@ This diagram shows the `close_subscription` process: verifying NFT ownership, bu
 The creator's `claim_tokens` instruction: calculating the vested amount based on the vesting schedule, transferring tokens from the vault to the creator's wallet, and updating the `claimed_by_creator_amount` in the User Subscription PDA.
 
 ![Claim Tokens Flow](tests/images/4.png)
+
 *Image 4: Creator withdraws vested earnings — vesting calculation, fund transfer, and PDA update.*
 
 ---
@@ -120,6 +124,7 @@ The creator's `claim_tokens` instruction: calculating the vested amount based on
 The `renew_subscription` flow: user deposits additional tokens, the protocol updates the `total_deposit_amount` in the existing User Subscription PDA, and optionally resets the vesting start time — all while keeping the same NFT.
 
 ![Renew Subscription Flow](tests/images/5.png)
+
 *Image 5: User extends subscription by depositing more tokens — existing NFT remains, PDA is updated.*
 
 
