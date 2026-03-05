@@ -1,0 +1,33 @@
+[package]
+name = "capstone"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"   # ← обязательно 2021!
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "capstone"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = [
+    "anchor-lang/idl-build",
+    "anchor-spl/idl-build",
+]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = "0.32.1"
+anchor-spl = { version = "0.32.1", features = ["metadata", "token", "associated_token"] }
+
+# Фиксируем версии, чтобы избежать edition 2024 от свежих transitive deps
+mpl-token-metadata = "5.1.1"
+base64ct = "1.6.0"          # последняя без 2024 (часто виновник)
+rmp-serde = "1.1.2"         # или 1.1.1 — проверь на crates.io
+rmp = "0.8.14"
