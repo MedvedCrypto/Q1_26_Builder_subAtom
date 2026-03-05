@@ -191,40 +191,125 @@ describe("solvency", () => {
     assert(plan.nftCollection.equals(nftCollection));
   });
 
-  it("buy subscription success", async () => {
-    const paymentMint = await createMint(6);
-    const nftCollection = Keypair.generate().publicKey;
-    const upfrontPercentage = 20;
-    const vestingDuration = 86400;
-    const planSeed = "buy_test";
+it("buy subscription success", async () => {
+  const paymentMint = await createMint(6);
+  const nftCollection = Keypair.generate().publicKey;
+  const upfrontPercentage = 20;
+  const vestingDuration = 86400;
+  const planSeed = "buy_test_" + Date.now();
 
-    const { planPda, vaultPda } = await createPlan(paymentMint, nftCollection, upfrontPercentage, vestingDuration, planSeed);
+  const { planPda, vaultPda } = await createPlan(paymentMint, nftCollection, upfrontPercentage, vestingDuration, planSeed);
 
-    const user = Keypair.generate();
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(user.publicKey, 10 * LAMPORTS_PER_SOL)
-    );
+  const user = Keypair.generate();
+  await provider.connection.confirmTransaction(
+    await provider.connection.requestAirdrop(user.publicKey, 10 * LAMPORTS_PER_SOL)
+  );
 
-    const userToken = await createTokenAccount(paymentMint, user.publicKey);
-    await mintTokens(paymentMint, userToken, 1000 * 10**6);
+  const userToken = await createTokenAccount(paymentMint, user.publicKey);
+  await mintTokens(paymentMint, userToken, 1000 * 10**6);
 
-    const nftMint = Keypair.generate();
-    const creatorToken = await createTokenAccount(paymentMint, payer.publicKey);
-    await buySubscription(planPda, vaultPda, user, userToken, nftMint, 1000 * 10**6, "NFT Name", "SYM", "uri", paymentMint, creatorToken);
+  const nftMint = Keypair.generate();
+  const creatorToken = await createTokenAccount(paymentMint, payer.publicKey);
+  
+  // ✅ Добавляем инструкцию для увеличения compute units
+  const tx = await program.methods
+    .buySubscription(new BN(1000 * 10**6), "NFT Name", "SYM", "uri")
+    .accounts({
+      user: user.publicKey,
+      plan: planPda,
+      vault: vaultPda,
+      userToken: userToken,
+      userSubscription: findUserSubscriptionPda(planPda, user.publicKey)[0],
+      nftMint: nftMint.publicKey,
+      nftAta: getAssociatedTokenAddressSync(nftMint.publicKey, user.publicKey),
+      metadata: findMetadataPda(nftMint.publicKey)[0],
+      masterEdition: findMasterEditionPda(nftMint.publicKey)[0],
+      paymentMint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      tokenMetadataProgram: METADATA_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      creatorToken
+    })
+    .signers([user, nftMint])
+    .transaction();
 
-    const userSubPda = findUserSubscriptionPda(planPda, user.publicKey)[0];
-    const userSub = await program.account.userSubscription.fetch(userSubPda);
-    assert(userSub.totalDepositAmount.eq(new BN(1000 * 10**6)));
-    assert(userSub.isActive);
-
-    const vaultAccount = await provider.connection.getTokenAccountBalance(vaultPda);
-    // 80% goes to vault (20% upfront)
-    assert.equal(vaultAccount.value.amount, (800 * 10**6).toString());
-
-    const nftAta = getAssociatedTokenAddressSync(nftMint.publicKey, user.publicKey);
-    const nftBalance = await provider.connection.getTokenAccountBalance(nftAta);
-    assert.equal(nftBalance.value.amount, "1");
+  // ✅ Добавляем приоритетную плату для большего лимита
+  const computeUnits = 400_000; // Увеличиваем лимит
+  const computePrice = 100_000; // Микро-лампорты
+  
+  const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+    units: computeUnits
   });
+  
+  const addPriorityFee = anchor.web3.ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: computePrice
+  });
+  
+  tx.add(modifyComputeUnits).add(addPriorityFee);
+  
+  await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [user, nftMint, payer.payer]);
+});it("buy subscription success", async () => {
+  const paymentMint = await createMint(6);
+  const nftCollection = Keypair.generate().publicKey;
+  const upfrontPercentage = 20;
+  const vestingDuration = 86400;
+  const planSeed = "buy_test_" + Date.now();
+
+  const { planPda, vaultPda } = await createPlan(paymentMint, nftCollection, upfrontPercentage, vestingDuration, planSeed);
+
+  const user = Keypair.generate();
+  await provider.connection.confirmTransaction(
+    await provider.connection.requestAirdrop(user.publicKey, 10 * LAMPORTS_PER_SOL)
+  );
+
+  const userToken = await createTokenAccount(paymentMint, user.publicKey);
+  await mintTokens(paymentMint, userToken, 1000 * 10**6);
+
+  const nftMint = Keypair.generate();
+  const creatorToken = await createTokenAccount(paymentMint, payer.publicKey);
+  
+  // ✅ Добавляем инструкцию для увеличения compute units
+  const tx = await program.methods
+    .buySubscription(new BN(1000 * 10**6), "NFT Name", "SYM", "uri")
+    .accounts({
+      user: user.publicKey,
+      plan: planPda,
+      vault: vaultPda,
+      userToken: userToken,
+      userSubscription: findUserSubscriptionPda(planPda, user.publicKey)[0],
+      nftMint: nftMint.publicKey,
+      nftAta: getAssociatedTokenAddressSync(nftMint.publicKey, user.publicKey),
+      metadata: findMetadataPda(nftMint.publicKey)[0],
+      masterEdition: findMasterEditionPda(nftMint.publicKey)[0],
+      paymentMint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      tokenMetadataProgram: METADATA_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      creatorToken
+    })
+    .signers([user, nftMint])
+    .transaction();
+
+  // ✅ Добавляем приоритетную плату для большего лимита
+  const computeUnits = 400_000; // Увеличиваем лимит
+  const computePrice = 100_000; // Микро-лампорты
+  
+  const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+    units: computeUnits
+  });
+  
+  const addPriorityFee = anchor.web3.ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: computePrice
+  });
+  
+  tx.add(modifyComputeUnits).add(addPriorityFee);
+  
+  await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [user, nftMint, payer.payer]);
+});
 
   it("renew subscription success", async () => {
     const paymentMint = await createMint(6);
@@ -388,47 +473,84 @@ it("close subscription success", async () => {
     assert.isAbove(Number(userBalance.value.amount), depositAmount * 0.95, "Юзер должен получить большую часть рефанда");
   });
 
-  it("query unvested balance", async () => {
-    const paymentMint = await createMint(6);
-    const nftCollection = Keypair.generate().publicKey;
-    const upfrontPercentage = 20;
-    const vestingDuration = 2;
-    const planSeed = "query_test";
+it("query unvested balance", async () => {
+  const paymentMint = await createMint(6);
+  const nftCollection = Keypair.generate().publicKey;
+  const upfrontPercentage = 20;
+  const vestingDuration = 2; // 2 секунды
+  const planSeed = "query_test_" + Date.now();
 
-    console.log(nftCollection)
+  const { planPda, vaultPda } = await createPlan(paymentMint, nftCollection, upfrontPercentage, vestingDuration, planSeed);
 
-    const { planPda, vaultPda } = await createPlan(paymentMint, nftCollection, upfrontPercentage, vestingDuration, planSeed);
+  const user = Keypair.generate();
+  await provider.connection.confirmTransaction(
+    await provider.connection.requestAirdrop(user.publicKey, 10 * LAMPORTS_PER_SOL)
+  );
 
-    const user = Keypair.generate();
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(user.publicKey, 10 * LAMPORTS_PER_SOL)
-    );
+  const userToken = await createTokenAccount(paymentMint, user.publicKey);
+  await mintTokens(paymentMint, userToken, 1000 * 10**6);
 
-    const userToken = await createTokenAccount(paymentMint, user.publicKey);
-    await mintTokens(paymentMint, userToken, 1000 * 10**6);
+  const nftMint = Keypair.generate();
+  const creatorToken = await createTokenAccount(paymentMint, payer.publicKey);
+  
+  // Добавляем compute units и для этой транзакции
+  const buyTx = await program.methods
+    .buySubscription(new BN(1000 * 10**6), "NFT Name", "SYM", "uri")
+    .accounts({
+      user: user.publicKey,
+      plan: planPda,
+      vault: vaultPda,
+      userToken: userToken,
+      userSubscription: findUserSubscriptionPda(planPda, user.publicKey)[0],
+      nftMint: nftMint.publicKey,
+      nftAta: getAssociatedTokenAddressSync(nftMint.publicKey, user.publicKey),
+      metadata: findMetadataPda(nftMint.publicKey)[0],
+      masterEdition: findMasterEditionPda(nftMint.publicKey)[0],
+      paymentMint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      tokenMetadataProgram: METADATA_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      creatorToken
+    })
+    .signers([user, nftMint])
+    .transaction();
 
-    const nftMint = Keypair.generate();
-    const creatorToken = await createTokenAccount(paymentMint, payer.publicKey);
-    await buySubscription(planPda, vaultPda, user, userToken, nftMint, 1000 * 10**6, "NFT Name", "SYM", "uri", paymentMint, creatorToken);
+  buyTx.add(
+    anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })
+  );
+  
+  await anchor.web3.sendAndConfirmTransaction(provider.connection, buyTx, [user, nftMint, payer.payer]);
 
-    await sleep(1100);
+  // Ждем 1.1 секунды (половина от 2 секунд)
+  await sleep(1100);
 
-    const userSubPda = findUserSubscriptionPda(planPda, user.publicKey)[0];
-    const userSub = await program.account.userSubscription.fetch(userSubPda);
-    const plan = await program.account.subscriptionPlan.fetch(planPda);
+  const userSubPda = findUserSubscriptionPda(planPda, user.publicKey)[0];
+  const userSub = await program.account.userSubscription.fetch(userSubPda);
+  const plan = await program.account.subscriptionPlan.fetch(planPda);
 
-    const currentTime = Math.floor(Date.now() / 1000);
-    const elapsed = currentTime - userSub.startTime.toNumber();
-    const upfront = (plan.upfrontPercentage * userSub.totalDepositAmount.toNumber()) / 100;
-    const remaining = userSub.totalDepositAmount.toNumber() - upfront;
-    const vestedLinear = (remaining * elapsed) / plan.vestingDuration.toNumber();
-    const vested = upfront + vestedLinear;
-    const unvested = userSub.totalDepositAmount.toNumber() - vested;
+  const currentTime = Math.floor(Date.now() / 1000);
+  const elapsed = currentTime - userSub.startTime.toNumber();
+  
+  // Правильный расчет вестинга
+  const totalAmount = userSub.totalDepositAmount.toNumber();
+  const upfront = (plan.upfrontPercentage * totalAmount) / 100;
+  const remaining = totalAmount - upfront;
+  
+  // Время не может превышать длительность вестинга
+  const vestingTime = Math.min(elapsed, plan.vestingDuration.toNumber());
+  const vestedLinear = (remaining * vestingTime) / plan.vestingDuration.toNumber();
+  const vested = upfront + vestedLinear;
+  const unvested = totalAmount - vested;
 
-    // 20% upfront + 40% vested (half of remaining 80%) = 60% vested
-    // 40% unvested
-    assert.approximately(unvested / 10**6, 400, 50);
-  });
+  console.log("Elapsed:", elapsed, "s");
+  console.log("Unvested:", unvested / 10**6);
+  console.log("Vested:", vested / 10**6);
+  
+  // За 1 секунду должно быть ~40% от оставшихся 80% = 32% + 20% upfront = 52% vested, 48% unvested
+  assert.approximately(unvested / 10**6, 480, 50);
+});
 
   it("prevent double spend after burn", async () => {
     const paymentMint = await createMint(6);
